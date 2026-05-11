@@ -45,5 +45,5 @@ jobs:
 
       - name: eks kubectl apply
         run: |
-          kubectl rollout restart deployment ordersystem-backend -n bradkim
+          kubectl rollout restart deployment ordersystem-backend -n sskim
         # kubectl apply -f ./2.ordersystem/k8s/k8s-ordersystem/depl_svc.yml
