@@ -7,6 +7,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class HealthController {
     @GetMapping("/health")
     public String healthCheck(){
-        return "ok1";
+        return "ok1-fixed-health";
     }
 }
