@@ -6,7 +6,7 @@ metadata:
 spec:
 # Deployment나 StatefulSet이 유지할 "옛날 ReplicaSet"의 수를 제한하는 옵션. 자원공간의 낭비 방지 및 관리의 편의성.
   revisionHistoryLimit: 2
-  replicas: 2
+  replicas: 4
   selector:
     matchLabels:
       app: ordersystem-backend

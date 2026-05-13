@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: member-depl
-  namespace: bradkim
+  namespace: sskim
 spec:
   replicas: 1
   selector:
@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: member-container
-        image: 346903264902.dkr.ecr.ap-northeast-2.amazonaws.com/member-service:latest
+        image: 846456671266.dkr.ecr.ap-northeast-2.amazonaws.com/member-service:latest
         ports:
         - containerPort: 8080
         resources:
@@ -54,7 +54,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: member-service
-  namespace: bradkim
+  namespace: sskim
 spec:
   type: ClusterIP
   ports:

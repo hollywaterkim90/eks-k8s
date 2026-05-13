@@ -30,3 +30,6 @@ eureka:
 server:
 #  0으로 세팅하면 spring이 임의 port를 할당
   port: 0
+
+product-service:
+  url: "" # 빈 값으로 두면 유레카에서 찾음
