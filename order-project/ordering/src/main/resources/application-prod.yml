@@ -24,7 +24,7 @@ spring:
       ddl-auto: create
     show_sql: true
   kafka:
-    kafka-server: kafka-service:9092
+    kafka-server: ${KAFKA_SERVERS:kafka-service:9092}
 
 product-service:
   url: "http://product-service" # 쿠베 서비스 이름으로 바로 호출
