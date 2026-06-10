@@ -1,0 +1,73 @@
+# 로컬 개발용 인프라 (MySQL · Redis · Kafka)
+# 백엔드 서비스(eureka/member/ordering/product/apigateway)와 프론트엔드는
+# 별도로 실행합니다. 이 compose 는 application-local.yml 이 의존하는 인프라만 띄웁니다.
+#
+#   docker compose up -d        # 백그라운드 기동
+#   docker compose ps           # 상태 확인
+#   docker compose logs -f kafka
+#   docker compose down         # 중지 (데이터 유지)
+#   docker compose down -v      # 중지 + 데이터 삭제
+
+services:
+  mysql:
+    image: mysql:8
+    container_name: ordermsa-mysql
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: "1234"   # application-local.yml 의 datasource.password 와 일치
+      MYSQL_DATABASE: ordermsa      # datasource.url 의 DB 이름과 일치
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p1234"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7
+    container_name: ordermsa-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  kafka:
+    image: apache/kafka:3.9.0
+    container_name: ordermsa-kafka
+    ports:
+      - "9092:9092"
+    environment:
+      # KRaft 모드 단일 노드 (Zookeeper 불필요)
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@localhost:9093"
+      KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093"
+      # 호스트(로컬 gradlew 실행 백엔드)에서 localhost:9092 로 접속
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://localhost:9092"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+volumes:
+  mysql-data:
+  redis-data:
+  kafka-data:

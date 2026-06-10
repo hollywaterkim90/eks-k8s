@@ -24,6 +24,13 @@ public class ProductController {
         return new ResponseEntity<>(product.getId(), HttpStatus.CREATED);
     }
 
+    // 상품 목록 조회. 게이트웨이 ALLOWED_PATHS(/product/list)에 등록되어 인증 없이 접근 가능하므로
+    // X-User-Id 헤더를 받지 않는다. 리터럴 경로 "/list"가 "{id}" 보다 우선 매칭된다.
+    @GetMapping("/list")
+    public ResponseEntity<?> productList(){
+        return new ResponseEntity<>(productService.productList(), HttpStatus.OK);
+    }
+
     @GetMapping("{id}")
     public ResponseEntity<?> productDetail(@PathVariable Long id, @RequestHeader("X-User-Id") String userId) throws InterruptedException {
         ProductResDto productResDto = productService.productDetail(id);

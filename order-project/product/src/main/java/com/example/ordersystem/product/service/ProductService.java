@@ -12,6 +12,9 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
 @Service
 @Transactional
 public class ProductService {
@@ -24,6 +27,18 @@ public class ProductService {
     public Product productCreate(ProductRegisterDto dto, String userId){
         Product product = productRepository.save(dto.toEntity(Long.parseLong(userId)));
         return product;
+    }
+
+    @Transactional(readOnly = true)
+    public List<ProductResDto> productList(){
+        return productRepository.findAll().stream()
+                .map(product -> ProductResDto.builder()
+                        .id(product.getId())
+                        .name(product.getName())
+                        .price(product.getPrice())
+                        .stockQuantity(product.getStockQuantity())
+                        .build())
+                .collect(Collectors.toList());
     }
 
     public ProductResDto productDetail(Long id){
