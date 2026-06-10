@@ -1,0 +1,31 @@
+# ArgoCD Application: order-project 앱 스택을 GitOps로 sskim 네임스페이스에 동기화.
+#
+# 부트스트랩(최초 1회): ArgoCD 설치(argocd.tf helm_release) 후 한 번 적용한다.
+#   kubectl apply -n argocd -f argocd/application.yaml
+# 이후부터는 git(main) 변경을 ArgoCD가 자동 감지·sync 한다.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: order-project
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/hollywaterkim90/eks-k8s.git
+    targetRevision: main
+    path: order-project   # order-project/kustomization.yaml 을 kustomize로 빌드
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: sskim
+  syncPolicy:
+    automated:
+      prune: true      # git에서 사라진 리소스는 클러스터에서도 제거
+      selfHeal: true   # 수동 변경(drift) 발생 시 git 상태로 복원
+    syncOptions:
+      - CreateNamespace=true   # sskim 네임스페이스 자동 생성
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m

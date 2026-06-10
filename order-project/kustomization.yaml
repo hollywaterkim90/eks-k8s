@@ -1,0 +1,27 @@
+# ArgoCD가 동기화하는 sskim 앱 스택 묶음.
+# 이미지 태그는 아래 images[].newTag 로 관리하며, GitHub Actions가 이 값을 SHA로 bump한다.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  # 공유 인프라
+  - k8s/redis.yml
+  - k8s/external-secrets.yml
+  - k8s/https.yml
+  - k8s/ingress.yml
+  # 마이크로서비스 Deployment/Service
+  - apigateway/k8s/depl_svc.yml
+  - member/k8s/depl_svc.yml
+  - ordering/k8s/depl_svc.yml
+  - product/k8s/depl_svc.yml
+
+# 🌟 이미지 태그 단일 관리 지점 (CI가 newTag만 SHA로 교체 → ArgoCD가 감지·배포)
+images:
+  - name: 846456671266.dkr.ecr.ap-northeast-2.amazonaws.com/prod-apigateway
+    newTag: latest
+  - name: 846456671266.dkr.ecr.ap-northeast-2.amazonaws.com/prod-member-service
+    newTag: latest
+  - name: 846456671266.dkr.ecr.ap-northeast-2.amazonaws.com/prod-ordering-service
+    newTag: latest
+  - name: 846456671266.dkr.ecr.ap-northeast-2.amazonaws.com/prod-product-service
+    newTag: latest

@@ -1,0 +1,150 @@
+name: build & push backend (GitOps)
+
+# GitOps 모델: 이 워크플로우는 "빌드 + ECR 푸시 + 매니페스트 이미지 태그 bump"까지만 한다.
+# 실제 클러스터 배포(sync)는 ArgoCD(argocd/application.yaml)가 담당한다 → kubectl 배포 없음.
+#
+# 트리거: main에 서비스 "소스" 변경이 푸시될 때만 (k8s 매니페스트/kustomization 변경은 제외 → 커밋 루프 방지).
+# 수동 실행(workflow_dispatch) 시 4개 전체 빌드.
+#
+# 사전 조건:
+#   - GitHub Secrets: AWS_KEY / AWS_SECRET (ECR push 권한)
+#   - ArgoCD가 설치되고 argocd/application.yaml 이 1회 적용돼 있어야 sync가 동작
+#   - ECR 레포(prod-*)가 terraform으로 생성돼 있어야 함
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'order-project/apigateway/src/**'
+      - 'order-project/apigateway/build.gradle'
+      - 'order-project/apigateway/Dockerfile'
+      - 'order-project/member/src/**'
+      - 'order-project/member/build.gradle'
+      - 'order-project/member/Dockerfile'
+      - 'order-project/ordering/src/**'
+      - 'order-project/ordering/build.gradle'
+      - 'order-project/ordering/Dockerfile'
+      - 'order-project/product/src/**'
+      - 'order-project/product/build.gradle'
+      - 'order-project/product/Dockerfile'
+  workflow_dispatch: {}
+
+env:
+  AWS_REGION: ap-northeast-2
+  REGISTRY: 846456671266.dkr.ecr.ap-northeast-2.amazonaws.com
+
+jobs:
+  # 1) 변경된 서비스 감지
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.set.outputs.services }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            apigateway:
+              - 'order-project/apigateway/src/**'
+              - 'order-project/apigateway/build.gradle'
+              - 'order-project/apigateway/Dockerfile'
+            member:
+              - 'order-project/member/src/**'
+              - 'order-project/member/build.gradle'
+              - 'order-project/member/Dockerfile'
+            ordering:
+              - 'order-project/ordering/src/**'
+              - 'order-project/ordering/build.gradle'
+              - 'order-project/ordering/Dockerfile'
+            product:
+              - 'order-project/product/src/**'
+              - 'order-project/product/build.gradle'
+              - 'order-project/product/Dockerfile'
+      - id: set
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo 'services=["apigateway","member","ordering","product"]' >> "$GITHUB_OUTPUT"
+          else
+            echo 'services=${{ steps.filter.outputs.changes }}' >> "$GITHUB_OUTPUT"
+          fi
+
+  # 2) 서비스별 이미지 빌드 & ECR 푸시 (:latest + :SHA)
+  build:
+    needs: detect
+    if: ${{ needs.detect.outputs.services != '' && needs.detect.outputs.services != '[]' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.detect.outputs.services) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: aws-actions/amazon-ecr-login@v2
+      - name: Resolve ECR repo
+        id: names
+        run: |
+          case "${{ matrix.service }}" in
+            apigateway) REPO=prod-apigateway ;;
+            member)     REPO=prod-member-service ;;
+            ordering)   REPO=prod-ordering-service ;;
+            product)    REPO=prod-product-service ;;
+            *) echo "unknown service ${{ matrix.service }}" && exit 1 ;;
+          esac
+          echo "repo=$REPO" >> "$GITHUB_OUTPUT"
+      - name: Build & push
+        env:
+          REPO: ${{ steps.names.outputs.repo }}
+          SVC: ${{ matrix.service }}
+          SHA: ${{ github.sha }}
+        run: |
+          docker build \
+            -t "$REGISTRY/$REPO:latest" \
+            -t "$REGISTRY/$REPO:$SHA" \
+            -f "order-project/$SVC/Dockerfile" "order-project/$SVC"
+          docker push "$REGISTRY/$REPO:latest"
+          docker push "$REGISTRY/$REPO:$SHA"
+
+  # 3) kustomization.yaml 이미지 태그를 SHA로 bump → 커밋 (ArgoCD가 이 변경을 sync)
+  bump:
+    needs: [detect, build]
+    if: ${{ needs.detect.outputs.services != '' && needs.detect.outputs.services != '[]' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Bump image tags in kustomization
+        env:
+          SERVICES: ${{ needs.detect.outputs.services }}
+          SHA: ${{ github.sha }}
+        run: |
+          echo "$SERVICES" | jq -r '.[]' | while read -r SVC; do
+            case "$SVC" in
+              apigateway) REPO=prod-apigateway ;;
+              member)     REPO=prod-member-service ;;
+              ordering)   REPO=prod-ordering-service ;;
+              product)    REPO=prod-product-service ;;
+            esac
+            yq -i "(.images[] | select(.name == \"$REGISTRY/$REPO\") | .newTag) = \"$SHA\"" \
+              order-project/kustomization.yaml
+          done
+      - name: Commit & push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add order-project/kustomization.yaml
+          if git diff --cached --quiet; then
+            echo "no tag changes"; exit 0
+          fi
+          git commit -m "ci: bump image tags to ${GITHUB_SHA:0:7} [skip ci]"
+          git push origin main

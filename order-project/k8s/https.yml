@@ -21,16 +21,16 @@ spec:
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
-  name: server-hollywaterkim-com-tls
+  name: api-hollywaterkim-com-tls
   namespace: sskim
 spec:
-  secretName: server-hollywaterkim-com-tls
+  secretName: api-hollywaterkim-com-tls
   duration: 2160h #90day
   renewBefore: 360h #before 15day
   issuerRef:
     name: my-issuer
     kind: ClusterIssuer
-  commonName: server.hollywaterkim.shop
+  commonName: api.hollywaterkim.shop
   dnsNames:
-  - server.hollywaterkim.shop
+  - api.hollywaterkim.shop
 

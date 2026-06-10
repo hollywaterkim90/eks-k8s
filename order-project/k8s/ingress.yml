@@ -11,10 +11,10 @@ metadata:
 spec:
   tls:
   - hosts:
-    - "server.hollywaterkim.shop"
-    secretName: server-hollywaterkim-com-tls
+    - "api.hollywaterkim.shop"
+    secretName: api-hollywaterkim-com-tls
   rules:
-  - host: server.hollywaterkim.shop  # 설정하려는 도메인 이름. 제외시에 elb주소로도 접근할수 있는 모든 도메인 접근 가능.
+  - host: api.hollywaterkim.shop  # 설정하려는 도메인 이름. 제외시에 elb주소로도 접근할수 있는 모든 도메인 접근 가능.
     http:
       paths:
       - path: / #모든 url요청을 apigateway-service로 라우팅
